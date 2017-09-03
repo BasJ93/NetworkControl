@@ -137,9 +137,11 @@ def addMAC():
 @app.route('/changeState', methods=['POST'])
 def changeState():
     #Wrap with try catch
-    _user = request.form['user']
+    chkbx,_user = request.form['user'].split('_')
     _enabled = request.form['enabled']
-    conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = _enabled, _user = _user))
+    conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
+    conn.commit()
+    #To be added: call the function to update switch and ap configuration.
     return "OK"
 
 if __name__=="__main__":
