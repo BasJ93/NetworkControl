@@ -1,14 +1,17 @@
-# -*- coding: utf-8 -*-
-"""
-https://code.tutsplus.com/tutorials/creating-a-web-app-from-scratch-using-python-flask-and-mysql--cms-22972
-Created on Sat Sep  2 16:37:23 2017
+#!/usr/bin/env python
 
-@author: bas
-"""
+# -*- coding: utf-8 -*-
+#"""
+#Flask code adapted from: https://code.tutsplus.com/tutorials/creating-a-web-app-from-scratch-using-python-flask-and-mysql--cms-22972
+#Created on Sat Sep  2 16:37:23 2017
+#
+#@author: Bas Janssen
+#"""
 
 from flask import Flask, render_template, request, redirect, session, Markup
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
+from configSwitch import configSwitchPort
 
 app = Flask(__name__)
 app.secret_key = 'why would I tell you my secret key?'
@@ -30,7 +33,10 @@ def showAddUser():
 @app.route('/addUser', methods=['POST'])
 def addUser():
     if session.get('user'):
-        _name = request.form['inputUser']
+        try:
+            _name = request.form['inputUser']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
         try:
             conn.cursor().execute("insert into Users (NAME, STATE) values ('{name}', 1);".format(name=_name))
             conn.commit()
@@ -64,19 +70,34 @@ def validateLogin():
 @app.route('/controlIndex')
 def controlIndex():
     if session.get('user'):
-        _users = conn.execute('''select NAME, STATE from Users;''')
+        try:
+            _users = conn.execute('''select NAME, STATE from Users;''')
+        except sqlite3.Error as e:
+            return render_template('error.html', error = str(e.args[0]))
         _overview = "<table class='table table-hover'><tr><th>User</th><th>State</th><th>Remove</th></tr>"
         for row in _users:
             _enabled = ""
             if row[1] > 0:
                 _enabled = "checked"
-            _overview = _overview + "<tr data-toggle='collapse' data-target='#{_user}' class='clickable'><td>{_user}</td><td><input type='checkbox' name='chkbx_{_user}' value='chkbx_{_user}' {_enabled}></td><td><i class='fa fa-times' aria-hidden='true'></i></span></td></tr><tr><td colspan='3'><table id='{_user}' class='table table-hover collapse'><tr><th>Port/MAC</th><th>Description</th></tr>".format(_user = row[0], _enabled = _enabled)
-            _Ports = conn.execute("select Users.NAME as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = row[0]))
+            _overview = _overview + "<tr><td data-toggle='collapse' data-target='#{_user}' class='clickable'>{_user}</td><td><input type='checkbox' name='chkbx_{_user}' value='chkbx_{_user}' {_enabled}></td><td><form action='/removeUser' method='post'><input type='hidden' name='user' value='{_user}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr><tr><td colspan='3'><table id='{_user}' class='table table-hover collapse'><tr><th>Port/MAC</th><th>Description</th></tr>".format(_user = row[0], _enabled = _enabled)
+            try:            
+                _Ports = conn.execute("select Users.NAME as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = row[0]))
+            except sqlite3.Error as e:
+                return render_template('error.html', error = str(e.args[0]))
             for port in _Ports:
-                _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td></tr>".format(_port = str(port[1]), _portName = port[2])
-            _MACS = conn.execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = row[0]))
+                if port[1] is None:
+                    _overview = _overview
+                else:
+                    _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td><td><form action='/removePort' method='post'><input type='hidden' name='port' value='{_port}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr>".format(_port = str(port[1]), _portName = port[2])
+            try:
+                _MACS = conn.execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = row[0]))
+            except sqlite3.Error as e:
+                return render_template('error.html', error = str(e.args[0]))
             for mac in _MACS:
-                _overview = _overview + "<tr><td>{_MAC}</td><td>{_MACName}</td></tr>".format(_MAC = str(mac[1]), _MACName = mac[2])
+                if mac[1] is None:
+                    _overview = _overview
+                else:
+                    _overview = _overview + "<tr><td>{_MAC}</td><td>{_MACName}</td><td><form action='/removeMAC' method='post'><input type='hidden' name='mac' value='{_MAC}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr>".format(_MAC = str(mac[1]), _MACName = mac[2])
             _overview = _overview + "</table></td></tr>"
         _overview = _overview + "</table>"
         return render_template('controlIndex.html', overview = Markup(_overview))
@@ -98,10 +119,12 @@ def showAddPort():
 @app.route('/addPort', methods=['POST'])
 def addPort():
     if session.get('user'):
-        #Wrap with try catch
-        _user = request.form['inputUser']
-        _port = request.form['inputPort']
-        _portDesignation = request.form['inputPortDesignation']
+        try:
+            _user = request.form['inputUser']
+            _port = request.form['inputPort']
+            _portDesignation = request.form['inputPortDesignation']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
         try:
             conn.cursor().execute("insert into Ports (NAME, DESIGNATION, STATE, USER) values ('{port}', '{portDesignation}', 1, (select ID from Users where NAME='{user}'));".format(user=_user, port=_port, portDesignation=_portDesignation))
             conn.commit()
@@ -121,10 +144,12 @@ def showAddMAC():
 @app.route('/addMAC', methods=['POST'])
 def addMAC():
     if session.get('user'):
-        #Wrap with try catch
-        _user = request.form['inputUser']
-        _MAC = request.form['inputMAC']
-        _MACDesignation = request.form['inputMACDesignation']
+        try:
+            _user = request.form['inputUser']
+            _MAC = request.form['inputMAC']
+            _MACDesignation = request.form['inputMACDesignation']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
         try:
             conn.cursor().execute("insert into MAC (NAME, ADDRESS, STATE, USER) values ('{_MACDesignation}', '{_MAC}', 1, (select ID from Users where NAME='{user}'));".format(user=_user, _MAC=_MAC, _MACDesignation=_MACDesignation))
             conn.commit()
@@ -134,14 +159,79 @@ def addMAC():
     else:
         return render_template('error.html',error = 'Unauthorized Access')
 
+@app.route('/removeUser', methods=['POST'])
+def removeUser():
+    if session.get('user'):
+        try:
+            _user = request.form['user']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
+        try:
+            conn.cursor().execute("delete from Users where NAME='{_name}';".format(_name = _user))
+        except sqlite3.Error as e:
+            return render_template('error.html', error = str(e))
+        return redirect('/')
+    else:
+        return render_template('error.html', error = 'Unauthorized Access')
+
+@app.route('/removePort', methods=['POST'])
+def removePort():
+    if session.get('user'):
+        try:
+            _port = request.form['port']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
+        try:
+            conn.cursor().execute("delete from Ports where NAME='{_port}';".format(_port = _port))
+        except sqlite3.Error as e:
+            return render_template('error.html', error = str(e))
+        return redirect('/')
+    else:
+        return render_template('error.html', error = 'Unauthorized Access')
+
+@app.route('/removeMAC', methods=['POST'])
+def removeMAC():
+    if session.get('user'):
+        try:
+            _mac = request.form['mac']
+        except Exception as e:
+            return render_template('error.html', error = str(e))
+        try:
+            conn.cursor().execute("delete from MAC where ADDRESS='{_mac}';".format(_mac = _mac))
+        except sqlite3.Error as e:
+            return render_template('error.html', error = str(e))
+        return redirect('/')
+    else:
+        return render_template('error.html', error = 'Unauthorized Access')
+
 @app.route('/changeState', methods=['POST'])
 def changeState():
-    #Wrap with try catch
-    chkbx,_user = request.form['user'].split('_')
-    _enabled = request.form['enabled']
-    conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
-    conn.commit()
-    #To be added: call the function to update switch and ap configuration.
+    try:
+        chkbx,_user = request.form['user'].split('_')
+        _enabled = request.form['enabled']
+    except Exception as e:
+            return render_template('error.html', error = str(e))
+    try:
+        conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
+        conn.commit()
+    except sqlite3.Error as e:
+        return render_template('error.html', error = str(e))
+    try:
+        _ports = conn.cursor().execute("select Users.Name as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = _user))
+    except sqlite3.Error as e:
+            return render_template('error.html', error = str(e))
+    for port in _ports:
+        if port[1] is None:
+            print "No ports for user."
+            return "OK"
+        else:
+            if int(_enabled) == 0:
+                print "Shutting port down for user."
+                configSwitchPort(port[1], "shutdown")
+            else:
+                print "Enabeling port for user."
+                configSwitchPort(port[1], "no shutdown")
+#To be added: call the function to update switch and ap configuration.
     return "OK"
 
 if __name__=="__main__":
