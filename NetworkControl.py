@@ -12,6 +12,7 @@ from flask import Flask, render_template, request, redirect, session, Markup
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from configSwitch import configSwitchPort
+from configAP import configAP
 
 app = Flask(__name__)
 app.secret_key = 'why would I tell you my secret key?'
@@ -210,28 +211,50 @@ def changeState():
         chkbx,_user = request.form['user'].split('_')
         _enabled = request.form['enabled']
     except Exception as e:
-            return render_template('error.html', error = str(e))
+            return str(e)
+    try:
+        _ports = conn.cursor().execute("select Users.Name as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = _user))
+    except sqlite3.Error as e:
+            return str(e)
+    for port in _ports:
+        if port[1] is None:
+            print "No ports for user."
+        else:
+            if int(_enabled) == 0:
+                print "Shutting port down for user."
+                result = configSwitchPort(port[1], "shutdown")
+                if result != "success":
+                    return result
+            else:
+                print "Enabeling port for user."
+                result = configSwitchPort(port[1], "no shutdown")
+                if result != "success":
+                    return result
+    try:
+        _MACS = conn.cursor().execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = _user))
+    except sqlite3.Error as e:
+            return str(e)
+    for MAC in _MACS:
+        if MAC[1] is None:
+            print "No MACsfor user."
+        else:
+            #Currently just deauth the device for 10 seconds
+            result = configAP(MAC[1], "10000")
+            if result != "success":
+                    return result
+#            if int(_enabled) == 0:
+#                print "Shutting port down for user."
+#                result = configSwitchPort(port[1], "shutdown")
+#            else:
+#                print "Enabeling port for user."
+#                result = configSwitchPort(port[1], "no shutdown")
+
+#To be added: call the function to updateap configuration.
     try:
         conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
         conn.commit()
     except sqlite3.Error as e:
-        return render_template('error.html', error = str(e))
-    try:
-        _ports = conn.cursor().execute("select Users.Name as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = _user))
-    except sqlite3.Error as e:
-            return render_template('error.html', error = str(e))
-    for port in _ports:
-        if port[1] is None:
-            print "No ports for user."
-            return "OK"
-        else:
-            if int(_enabled) == 0:
-                print "Shutting port down for user."
-                configSwitchPort(port[1], "shutdown")
-            else:
-                print "Enabeling port for user."
-                configSwitchPort(port[1], "no shutdown")
-#To be added: call the function to update switch and ap configuration.
+        return str(e)
     return "OK"
 
 if __name__=="__main__":

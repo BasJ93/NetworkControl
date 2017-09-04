@@ -30,9 +30,23 @@
           {
             $enabled = 0;
           }
-        $.post("/changeState", { user: event.target.name, enabled: $enabled});
+        $.post("/changeState", { user: event.target.name, enabled: $enabled}, show_toast);
         });
       });
+
+	function show_toast(data) {
+		var x = document.getElementById("snackbar")
+		
+		console.log(data);
+		$("#snackbar").html(data);
+
+		// Add the "show" class to DIV
+		x.className = "show";
+
+		// After 3 seconds, remove the show class from DIV
+		setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+	}
+
     });
     </script>
 
@@ -59,6 +73,8 @@
         </div>
  
  
+	<div id="snackbar">Return data</div>
+
         <footer class="footer">
         <p>&copy; Bas Janssen 2017</p>
         </footer>
