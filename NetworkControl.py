@@ -12,7 +12,7 @@ from flask import Flask, render_template, request, redirect, session, Markup
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from configSwitch import configSwitchPort
-from configAP import configAP
+from configAP import deauthMAC
 
 app = Flask(__name__)
 app.secret_key = 'why would I tell you my secret key?'
@@ -80,7 +80,7 @@ def controlIndex():
             _enabled = ""
             if row[1] > 0:
                 _enabled = "checked"
-            _overview = _overview + "<tr><td data-toggle='collapse' data-target='#{_user}' class='clickable'>{_user}</td><td><input type='checkbox' name='chkbx_{_user}' value='chkbx_{_user}' {_enabled}></td><td><form action='/removeUser' method='post'><input type='hidden' name='user' value='{_user}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr><tr><td colspan='3'><table id='{_user}' class='table table-hover collapse'><tr><th>Port/MAC</th><th>Description</th></tr>".format(_user = row[0], _enabled = _enabled)
+            _overview = _overview + "<tr><td data-toggle='collapse' data-target='#{_user}' class='clickable'>{_user}</td><td><input type='checkbox' name='chkbx_{_user}' value='chkbx_{_user}' {_enabled}></td><td><form action='/removeUser' method='post'><input type='hidden' name='user' value='{_user}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons'>clear</i></button></form></td></tr><tr><td colspan='3'><table id='{_user}' class='collapse'><tr><th>Port/MAC</th><th>Description</th><th>State</th><th>Remove</th></tr>".format(_user = row[0], _enabled = _enabled) #table table-hover 
             try:            
                 _Ports = conn.execute("select Users.NAME as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = row[0]))
             except sqlite3.Error as e:
@@ -89,16 +89,22 @@ def controlIndex():
                 if port[1] is None:
                     _overview = _overview
                 else:
-                    _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td><td><form action='/removePort' method='post'><input type='hidden' name='port' value='{_port}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr>".format(_port = str(port[1]), _portName = port[2])
+                    _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td><td><form action='/removePort' method='post'><input type='hidden' name='port' value='{_port}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons' aria-hidden='true'>clear</i></button></form></td></tr>".format(_port = str(port[1]), _portName = port[2])
             try:
-                _MACS = conn.execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = row[0]))
+                _MACS = conn.execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME, MAC.STATE from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = row[0]))
             except sqlite3.Error as e:
                 return render_template('error.html', error = str(e.args[0]))
             for mac in _MACS:
                 if mac[1] is None:
                     _overview = _overview
                 else:
-                    _overview = _overview + "<tr><td>{_MAC}</td><td>{_MACName}</td><td><form action='/removeMAC' method='post'><input type='hidden' name='mac' value='{_MAC}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='fa fa-times' aria-hidden='true'></i></button></form></td></tr>".format(_MAC = str(mac[1]), _MACName = mac[2])
+                    if mac[3] == 0:
+                        _icon = "signal_wifi_off"
+                    elif mac[3] == 1:
+                        _icon = "signal_wifi_4_bar"
+                    elif mac[3] == 2:
+                        _icon = "signal_wifi_4_bar_lock"
+                    _overview = _overview + "<tr><td>{_MAC}</td><td>{_MACName}</td><td><i class='material-icons'>{_icon}</i></td><td><form action='/removeMAC' method='post'><input type='hidden' name='mac' value='{_MAC}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons' aria-hidden='true'>clear</i></button></form></td></tr>".format(_MAC = str(mac[1]), _MACName = mac[2], _icon = _icon)
             _overview = _overview + "</table></td></tr>"
         _overview = _overview + "</table>"
         return render_template('controlIndex.html', overview = Markup(_overview))
@@ -238,18 +244,22 @@ def changeState():
         if MAC[1] is None:
             print "No MACsfor user."
         else:
-            #Currently just deauth the device for 10 seconds
-            result = configAP(MAC[1], "10000")
-            if result != "success":
-                    return result
-#            if int(_enabled) == 0:
-#                print "Shutting port down for user."
-#                result = configSwitchPort(port[1], "shutdown")
-#            else:
-#                print "Enabeling port for user."
-#                result = configSwitchPort(port[1], "no shutdown")
-
-#To be added: call the function to updateap configuration.
+            if int(_enabled) == 0:
+                #Currently just deauth the device for 10 seconds
+                result = deauthMAC(MAC[1], "10000")
+                if result != "success":
+                        return result
+                try:
+                    conn.cursor().execute("update MAC set STATE={_enabled} where ADDRESS='{_MAC}';".format(_enabled = 2, _MAC = MAC[1]))
+                    conn.commit()
+                except sqlite3.Error as e:
+                    return str(e)
+            else:
+                try:
+                    conn.cursor().execute("update MAC set STATE={_enabled} where ADDRESS='{_MAC}';".format(_enabled = 1, _MAC = MAC[1]))
+                    conn.commit()
+                except sqlite3.Error as e:
+                    return str(e)
     try:
         conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
         conn.commit()

@@ -12,7 +12,7 @@ import pexpect
 
 ap_ip = "192.168.2.200"
 ap_user = "root"
-#This must be replaced with an SSH key
+
 
 #use uci to set the maclist, then deauth the MAC(s)
 
@@ -24,7 +24,7 @@ ap_user = "root"
 #wifi down; wifi
 
 
-def configAP(MAC, ban_time):
+def deauthMAC(MAC, ban_time):
     try:
         try:
             child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap_ip))
@@ -45,4 +45,4 @@ def configAP(MAC, ban_time):
     return "success"
 
 if __name__=="__main__":
-    configAP("40:88:05:C6:F0:D5", 10000)
+    deauthMAC("40:88:05:C6:F0:D5", 10000)
