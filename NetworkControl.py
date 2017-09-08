@@ -242,7 +242,7 @@ def changeState():
             return str(e)
     for MAC in _MACS:
         if MAC[1] is None:
-            print "No MACsfor user."
+            print "No MACs for user."
         else:
             if int(_enabled) == 0:
                 #Currently just deauth the device for 10 seconds
