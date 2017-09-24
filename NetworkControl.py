@@ -12,7 +12,7 @@ from flask import Flask, render_template, request, redirect, session, Markup
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 from configSwitch import configSwitchPort
-from configAP import deauthMAC
+from configAP import deauthMAC, updateMACList
 
 app = Flask(__name__)
 app.secret_key = 'why would I tell you my secret key?'
@@ -260,11 +260,15 @@ def changeState():
                     conn.commit()
                 except sqlite3.Error as e:
                     return str(e)
+    result = updateMACList()
+    if result != "success":
+        return result
     try:
         conn.cursor().execute("update Users set STATE={_enabled} where NAME='{_user}';".format(_enabled = int(_enabled), _user = _user))
         conn.commit()
     except sqlite3.Error as e:
         return str(e)
+    
     return "OK"
 
 if __name__=="__main__":

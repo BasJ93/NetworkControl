@@ -11,9 +11,8 @@ import sys
 import pexpect
 import sqlite3
 
-ap_ip = "192.168.2.200"
+ap_ip = "192.168.10.100"
 ap_user = "root"
-
 
 #use uci to set the maclist, then deauth the MAC(s)
 
@@ -32,11 +31,9 @@ def deauthMAC(MAC, ban_time):
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
-            child.expect('password:')
         except pexpect.TIMEOUT:
             return "Error: TImeout AP"
         #Login to the AP, not required with an SSH key
-        child.sendline(ap_pw)
         child.expect('#')
         child.sendline("ubus call hostapd.wlan0 del_client '{\"addr\":\"" + MAC + "\", \"reason\":1, \"deauth\":true, \"ban_time\":" + ban_time + "}'")
         child.expect('#')
@@ -67,11 +64,9 @@ def updateMACList():
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
-            child.expect('password:')
         except pexpect.TIMEOUT:
             return "Error: TImeout AP"
         #Login to the AP, not required with an SSH key
-        child.sendline(ap_pw)
         child.expect('#')
         child.sendline(uci_maclist)
         child.expect('#')
@@ -93,11 +88,9 @@ def restartWiFi():
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
-            child.expect('password:')
         except pexpect.TIMEOUT:
             return "Error: TImeout AP"
         #Login to the AP, not required with an SSH key
-        child.sendline(ap_pw)
         child.expect('#')
         child.sendline("wifi down; wifi")
         child.expect('#')
