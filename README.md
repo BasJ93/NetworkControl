@@ -7,4 +7,4 @@ The switch is controlled over the hidden telnet service running on port 60000. (
 
 The APs are controlled over SSH, and use UCI to configure the maclist. The APs are also commanded to deauth the devices for 24h, using a dbus command.
 
-The app is build using Python 2.7, Flask, sqlite3, bootstrap, jquery and material icons.
+The app is build using Python 2.7, Flask, sqlite3, bootstrap, jquery and material icons. The icons for the switch port state come from the Ubuntu theme for network-manager-applet.
