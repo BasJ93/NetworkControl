@@ -11,7 +11,8 @@ import sys
 import pexpect
 import sqlite3
 
-ap_ip = "192.168.10.100"
+ap1_ip = "192.168.10.100"
+ap2_ip = "192.168.10.101"
 ap_user = "root"
 
 #use uci to set the maclist, then deauth the MAC(s)
@@ -23,16 +24,17 @@ ap_user = "root"
 #uci commit wireless
 #wifi down; wifi
 
+#Apperantly it is not enough to deauth the client and fill the blocklist. Wifi needs to be restarted.
 
 def deauthMAC(MAC, ban_time):
     try:
         try:
-            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap_ip))
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap1_ip))
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
         except pexpect.TIMEOUT:
-            return "Error: TImeout AP"
+            return "Error: TImeout AP1"
         #Login to the AP, not required with an SSH key
         child.expect('#')
         child.sendline("ubus call hostapd.wlan0 del_client '{\"addr\":\"" + MAC + "\", \"reason\":1, \"deauth\":true, \"ban_time\":" + ban_time + "}'")
@@ -40,7 +42,23 @@ def deauthMAC(MAC, ban_time):
         child.sendline('exit')
         return("success")
     except (pexpect.EOF, pexpect.TIMEOUT):
-        return "Error: AP config failed"
+        return "Error: AP1 deauth failed"
+    try:
+        try:
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap2_ip))
+            child.logfile = sys.stdout
+            child.timeout = 4
+            #This will not be true after we implement SSH keys
+        except pexpect.TIMEOUT:
+            return "Error: TImeout AP2"
+        #Login to the AP, not required with an SSH key
+        child.expect('#')
+        child.sendline("ubus call hostapd.wlan0 del_client '{\"addr\":\"" + MAC + "\", \"reason\":1, \"deauth\":true, \"ban_time\":" + ban_time + "}'")
+        child.expect('#')
+        child.sendline('exit')
+        return("success")
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return "Error: AP2 deauth failed"
     return "success"
 
 def updateMACList():
@@ -60,12 +78,12 @@ def updateMACList():
     print uci_maclist
     try:
         try:
-            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap_ip))
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap1_ip))
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
         except pexpect.TIMEOUT:
-            return "Error: TImeout AP"
+            return "Error: TImeout AP1"
         #Login to the AP, not required with an SSH key
         child.expect('#')
         child.sendline(uci_maclist)
@@ -77,19 +95,39 @@ def updateMACList():
         child.sendline('exit')
         return("success")
     except (pexpect.EOF, pexpect.TIMEOUT):
-        return "Error: AP config failed"
+        return "Error: AP1 blocklist config failed"
+    try:
+        try:
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap2_ip))
+            child.logfile = sys.stdout
+            child.timeout = 4
+            #This will not be true after we implement SSH keys
+        except pexpect.TIMEOUT:
+            return "Error: TImeout AP2"
+        #Login to the AP, not required with an SSH key
+        child.expect('#')
+        child.sendline(uci_maclist)
+        child.expect('#')
+        child.sendline("uci set wireless.default_radio0.macfilter=deny")
+        child.expect('#')
+        child.sendline("uci commit wireless")
+        child.expect('#')
+        child.sendline('exit')
+        return("success")
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return "Error: AP2 blocklist config failed"
     return "success"
     conn.close()
     
 def restartWiFi():
     try:
         try:
-            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap_ip))
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap1_ip))
             child.logfile = sys.stdout
             child.timeout = 4
             #This will not be true after we implement SSH keys
         except pexpect.TIMEOUT:
-            return "Error: TImeout AP"
+            return "Error: TImeout AP1"
         #Login to the AP, not required with an SSH key
         child.expect('#')
         child.sendline("wifi down; wifi")
@@ -97,7 +135,30 @@ def restartWiFi():
         child.sendline('exit')
         return("success")
     except (pexpect.EOF, pexpect.TIMEOUT):
-        return "Error: AP config failed"
+        return "Error: AP1 wifi restart failed"
+    try:
+        try:
+            child = pexpect.spawn("ssh {user}@{host}".format(user=ap_user, host=ap2_ip))
+            child.logfile = sys.stdout
+            child.timeout = 4
+            #This will not be true after we implement SSH keys
+        except pexpect.TIMEOUT:
+            return "Error: TImeout AP2"
+        #Login to the AP, not required with an SSH key
+        child.expect('#')
+        child.sendline("wifi down; wifi")
+        child.expect('#')
+        child.sendline('exit')
+        return("success")
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return "Error: AP2 wifi restart failed"
+    conn = sqlite3.connect('netwerkcontrol.db')
+    try:
+        conn.cursor().execute("update MAC set STATE={_disabled} where STATE='{_blocked}';".format(_disabled = 3, _blocked = 0))
+        conn.commit()
+    except sqlite3.Error as e:
+        return str(e)
+    conn.close()
     return "success"
 
 if __name__=="__main__":

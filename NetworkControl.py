@@ -9,10 +9,13 @@
 #"""
 
 from flask import Flask, render_template, request, redirect, session, Markup
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 import sqlite3
 from configSwitch import configSwitchPort
-from configAP import deauthMAC, updateMACList
+from configAP import deauthMAC, updateMACList, restartWiFi
+import schedule
+import time
+
 
 app = Flask(__name__)
 app.secret_key = 'why would I tell you my secret key?'
@@ -82,14 +85,18 @@ def controlIndex():
                 _enabled = "checked"
             _overview = _overview + "<tr><td data-toggle='collapse' data-target='#{_user}' class='clickable'>{_user}</td><td><input type='checkbox' name='chkbx_{_user}' value='chkbx_{_user}' {_enabled}></td><td><form action='/removeUser' method='post'><input type='hidden' name='user' value='{_user}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons'>clear</i></button></form></td></tr><tr><td colspan='3'><table id='{_user}' class='collapse'><tr><th>Port/MAC</th><th>Description</th><th>State</th><th>Remove</th></tr>".format(_user = row[0], _enabled = _enabled) #table table-hover 
             try:            
-                _Ports = conn.execute("select Users.NAME as User, Ports.NAME as Port, Ports.DESIGNATION from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = row[0]))
+                _Ports = conn.execute("select Users.NAME as User, Ports.NAME as Port, Ports.DESIGNATION, Ports.STATE from Users left join Ports on Users.ID=Ports.USER where Users.NAME='{_user}';".format(_user = row[0]))
             except sqlite3.Error as e:
                 return render_template('error.html', error = str(e.args[0]))
             for port in _Ports:
                 if port[1] is None:
                     _overview = _overview
                 else:
-                    _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td><td><form action='/removePort' method='post'><input type='hidden' name='port' value='{_port}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons' aria-hidden='true'>clear</i></button></form></td></tr>".format(_port = str(port[1]), _portName = port[2])
+                    if port[3] == 0:
+                        _icon = "down"
+                    else:
+                        _icon = "up"
+                    _overview = _overview + "<tr><td>{_port}</td><td>{_portName}</td><td><img src='/static/ethernet_link_{_icon}.svg'></td><td><form action='/removePort' method='post'><input type='hidden' name='port' value='{_port}'><button id='btnRemove' class='btn btn-primary btn-block' type='submit'><i class='material-icons' aria-hidden='true'>clear</i></button></form></td></tr>".format(_port = str(port[1]), _portName = port[2], _icon = _icon)
             try:
                 _MACS = conn.execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME, MAC.STATE from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = row[0]))
             except sqlite3.Error as e:
@@ -231,11 +238,19 @@ def changeState():
                 result = configSwitchPort(port[1], "shutdown")
                 if result != "success":
                     return result
+                try:
+                    conn.cursor().execute("update ports set STATE={_enabled} where NAME='{_name}';".format(_enabled = int(_enabled), _name = port[1]))
+                except sqlite3.Error as e:
+                    return str(e)
             else:
                 print "Enabeling port for user."
                 result = configSwitchPort(port[1], "no shutdown")
                 if result != "success":
                     return result
+                try:
+                    conn.cursor().execute("update ports set STATE={_enabled} where NAME='{_name}';".format(_enabled = int(_enabled), _name = port[1]))
+                except sqlite3.Error as e:
+                    return str(e)
     try:
         _MACS = conn.cursor().execute("select Users.Name as User, MAC.ADDRESS as MAC, MAC.NAME from Users  left join MAC on Users.ID=MAC.USER where Users.NAME='{_user}';".format(_user = _user))
     except sqlite3.Error as e:
@@ -279,3 +294,8 @@ if __name__=="__main__":
     conn.execute('''create table if not exists Ports(ID INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL, NAME TEXT NOT NULL, DESIGNATION TEXT NOT NULL, USER INT NOT NULL, STATE INT, FOREIGN KEY(USER) REFERENCES Users(ID));''')
     conn.execute('''create table if not exists MAC(ID INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL, NAME TEXT NOT NULL, ADDRESS TEXT NOT NULL, USER UNT NOT NULL, STATE INT, FOREIGN KEY (USER) REFERENCES Users(ID));''')
     app.run(host='0.0.0.0', port=8000)
+    schedule.every().day.at("03:30").do(restartWiFi)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
